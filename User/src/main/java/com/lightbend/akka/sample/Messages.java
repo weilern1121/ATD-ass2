@@ -1,0 +1,195 @@
+package com.lightbend.akka.sample;
+
+import akka.actor.ActorRef;
+
+public class Messages {
+
+    static public class Connect implements java.io.Serializable{
+        public final String userName;
+
+        public Connect(String userName) {
+            this.userName = userName;
+        }
+    }
+
+    static public class DisConnect implements java.io.Serializable{
+        public final String userName;
+
+        public DisConnect(String userName) {
+            this.userName = userName;
+        }
+    }
+
+    // -------------- Send Message
+
+    static public class SendMessage implements java.io.Serializable{
+        public final String sendTo;
+
+        public SendMessage(String sendTo) {
+            this.sendTo = sendTo;
+        }
+    }
+
+    static public class SendTextMessage extends SendMessage implements java.io.Serializable{
+        public final String message;
+
+        public SendTextMessage(String sendTo, String message) {
+            super(sendTo);
+            this.message = message;
+        }
+    }
+
+    static public class SendFileMessage extends SendMessage implements java.io.Serializable{
+        public final String path;
+
+        public SendFileMessage(String sendTo, String path) {
+            super(sendTo);
+            this.path = path;
+        }
+    }
+
+
+// -------------- Receive Message
+
+    static public class ReceiveMessage implements java.io.Serializable{
+        public String sendFrom;
+        public String userOrGroup;
+
+        public ReceiveMessage(String sendFrom, String userOrGroup) {
+            this.sendFrom = sendFrom;
+            this.userOrGroup = userOrGroup;
+        }
+    }
+
+    static public class ReceiveTextMessage extends ReceiveMessage implements java.io.Serializable{
+        public final String message;
+
+        public ReceiveTextMessage(String sendFrom, String userOrGroup, String message) {
+            super(sendFrom, userOrGroup);
+            this.message = message;
+        }
+    }
+
+    static public class ReceiveFileMessage extends ReceiveMessage implements java.io.Serializable{
+        public final byte[] file;
+
+        public ReceiveFileMessage(String sendFrom, String userOrGroup, byte[] file) {
+            super(sendFrom, userOrGroup);
+            this.file = file;
+        }
+    }
+
+    static public class GroupLeave implements java.io.Serializable{
+        public final String groupName;
+        public final String sourceUserName;
+
+        public GroupLeave(String groupName, String sourceUserName) {
+            this.groupName = groupName;
+            this.sourceUserName = sourceUserName;
+        }
+    }
+
+    static public class GroupInviteUser implements java.io.Serializable{
+        public final String groupName;
+        public final String sourceUserName;
+        public final String targetUserName;
+        public ActorRef targetActorRef;
+
+        public GroupInviteUser(String groupName, String sourceUserName, String targetUserName, ActorRef ref) {
+            this.groupName = groupName;
+            this.sourceUserName = sourceUserName;
+            this.targetUserName = targetUserName;
+            this.targetActorRef = ref;
+        }
+        public void setActorRef(ActorRef ref){
+            this.targetActorRef=ref;
+        }
+    }
+
+    static public class AskTargetToGroupInviteUser extends GroupInviteUser implements java.io.Serializable{
+        public AskTargetToGroupInviteUser(String groupName, String sourceUserName, String targetUserName, ActorRef ref) {
+            super(groupName, sourceUserName, targetUserName, ref);
+        }
+    }
+
+
+    static public class ResponseToGroupInviteUser implements java.io.Serializable{
+        public final String groupName;
+        public final String sourceUserName;
+        public final String targetUserName;
+        public final String answer;
+        public final ActorRef targetActorRef;
+
+        public ResponseToGroupInviteUser(String groupName, String sourceUserName, String targetUserName, String ans, ActorRef actorref) {
+            this.groupName = groupName;
+            this.sourceUserName = sourceUserName;
+            this.targetUserName = targetUserName;
+            this.answer = ans;
+            this.targetActorRef = actorref;
+        }
+    }
+
+    static public class GroupCreate implements java.io.Serializable{
+        public final String groupName;
+        public String adminName;
+
+        public GroupCreate(String groupName, String adminName) {
+            this.groupName = groupName;
+            this.adminName = adminName;
+        }
+    }
+
+    static public class GroupCoAdmin extends BasicGroupAdminAction implements java.io.Serializable{
+        public final String requestType;
+        public GroupCoAdmin(String groupName, String targetUserName, String source,String type) {
+            super(groupName,targetUserName,source);
+            this.requestType=type;
+        }
+    }
+
+
+
+    static public class GroupMessage implements java.io.Serializable{
+        public final ReceiveMessage message;
+
+        public GroupMessage(ReceiveMessage message) {
+            this.message = message;
+        }
+    }
+
+    //----------------------------------------BasicGroupAdminAction
+
+    static public class BasicGroupAdminAction implements java.io.Serializable{
+        public final String groupName;
+        public final String targetUserName;
+        public String sourceUserName;
+
+        public BasicGroupAdminAction(String groupName, String targetUserName, String sourceUserName) {
+            this.groupName = groupName;
+            this.targetUserName = targetUserName;
+            this.sourceUserName = sourceUserName;
+        }
+    }
+
+    static public class GroupUserRemove extends BasicGroupAdminAction implements java.io.Serializable{
+        public GroupUserRemove(String groupName, String targetUserName) {
+            super(groupName, targetUserName, null);
+        }
+    }
+
+    static public class GroupUserMute extends BasicGroupAdminAction implements java.io.Serializable{
+        public long time;
+        public GroupUserMute(String groupName, String targetUserName, long time) {
+            super(groupName, targetUserName, null);
+            this.time = time;
+        }
+    }
+
+    static public class GroupUserUnMute extends BasicGroupAdminAction implements java.io.Serializable{
+        public GroupUserUnMute(String groupName, String targetUserName) {
+            super(groupName, targetUserName, null);
+        }
+    }
+
+    //----------------------------------------BasicGroupAction END
+}
