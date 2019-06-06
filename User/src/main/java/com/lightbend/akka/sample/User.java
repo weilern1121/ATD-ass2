@@ -155,8 +155,7 @@ public class User extends AbstractActor {
   }
 
   private void sendMessage(SendMessage message) {
-    String[] splitUserport =  message.sendTo.split(":");
-    ActorSelection sendTo = getContext().actorSelection("akka://System@127.0.0.1:"+splitUserport[1]+"/user/" + splitUserport[0]); // todo: CHANGE PATH!!
+    ActorSelection sendTo = getActorByName(message.sendTo);
     if (message instanceof SendFileMessage) {
       this.sendFileMessage(sendTo, (SendFileMessage) message);
     }
@@ -207,7 +206,7 @@ public class User extends AbstractActor {
       File file = new File("files/");
       OutputStream os = new FileOutputStream(file);
       os.write(message.file);
-      System.out.printf("[%s][%s][%s] File received: /files\n", date, message.userOrGroup, message.sendFrom);
+      System.out.printf("[%s][%s][%s] File received: /files\n", date, message.userOrGroup, getActorName(message.sendFrom));
       os.close();
     }
     catch (Exception e){
@@ -216,7 +215,27 @@ public class User extends AbstractActor {
   }
 
   private void receiveTextMessage(String date, ReceiveTextMessage message) {
-    System.out.printf("[%s][%s][%s] %s\n", date, message.userOrGroup, message.sendFrom, message.message);
+    System.out.printf("[%s][%s][%s] %s\n", date, message.userOrGroup, getActorName(message.sendFrom), message.message);
+  }
+
+  private ActorSelection getActorByName(String userName){
+    if(userName.contains(":")){
+      String[] splitUserName = userName.split(":");
+      return getContext().actorSelection("akka://System@127.0.0.1:"+splitUserName[1]+"/user/" + splitUserName[0]);
+    }
+    else{
+      return getContext().actorSelection("user/" + userName);
+    }
+  }
+
+  private String getActorName(String userName){
+    if(userName.contains(":")){
+      String[] splitUserName = userName.split(":");
+      return splitUserName[0];
+    }
+    else{
+      return userName;
+    }
   }
 
   //-------------------------------------------------------------------------------

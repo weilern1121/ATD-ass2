@@ -9,6 +9,8 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import scala.concurrent.Await;
 import scala.concurrent.Future;
+
+import java.util.Arrays;
 import java.util.Scanner;
 import java.util.concurrent.TimeUnit;
 
@@ -18,13 +20,17 @@ public class UserMain {
   private static ActorSelection server;
   private static ActorSystem system;
   private static String userName;
+  private static String port = null;
 
   public static void main(String[] args) {
     Scanner scanner = new Scanner(System.in);
     boolean exit=false;
     String[] command;
     Config conf = ConfigFactory.load("user1.conf");;
-    String port = "8082";
+    if(args[0].equals("1")) {
+      conf = ConfigFactory.load("user1.conf");
+      port = "8082";
+    }
     if(args[0].equals("2")) {
       conf = ConfigFactory.load("user2.conf");
       port = "8084";
@@ -72,7 +78,8 @@ public class UserMain {
         UserMain.user.tell(new DisConnect(command[2]), ActorRef.noSender());
         break;
       case "text":
-        UserMain.user.tell(new SendTextMessage(command[2], command[3]), ActorRef.noSender());
+        String message = String.join(" ", Arrays.asList(command).subList(3, command.length));
+        UserMain.user.tell(new SendTextMessage(command[2], message), ActorRef.noSender());
         break;
       case "file":
         UserMain.user.tell(new Messages.SendFileMessage(command[2], command[3]), ActorRef.noSender());
@@ -82,10 +89,10 @@ public class UserMain {
   private static void groupCommand(String[] command){
     switch (command[1]){
       case "create":
-        connectToServer(new Connect(command[2]));
+        UserMain.user.tell(new GroupCreate(command[2], userName), ActorRef.noSender());
         break;
       case "leave":
-        UserMain.user.tell(new DisConnect(command[2]), ActorRef.noSender());
+        UserMain.user.tell(new GroupLeave(command[2], userName), ActorRef.noSender());
         break;
       case "send":
         switch(command[2]){
@@ -130,7 +137,10 @@ public class UserMain {
       }
       else{
         UserMain.user = UserMain.system.actorOf(User.props(connect.userName),connect.userName); // todo: CHANGE PATH!!
-        UserMain.userName = connect.userName;
+        if(port != null)
+          UserMain.userName = connect.userName+":"+port;
+        else
+          UserMain.userName = connect.userName;
         System.out.println(result);
       }
     }

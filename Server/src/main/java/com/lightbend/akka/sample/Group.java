@@ -1,7 +1,5 @@
 package com.lightbend.akka.sample;
-import akka.actor.AbstractActor;
-import akka.actor.ActorRef;
-import akka.actor.Props;
+import akka.actor.*;
 import akka.pattern.Patterns;
 import akka.util.Timeout;
 import com.lightbend.akka.sample.Messages.*;
@@ -14,6 +12,19 @@ import java.util.concurrent.*;
 
 
 public class Group extends AbstractActor {
+    private String groupName;
+    private String admin;
+    private final HashMap<String, GroupUser> groupUsers;
+    private final MuteService muteService;
+
+    public Group(String groupName, String adminName) {
+        this.groupName = groupName;
+        this.admin = adminName;
+        this.muteService = new MuteService();
+        this.groupUsers = new HashMap<>();
+        ActorSelection adminRef = getActorByName(adminName);
+        this.groupUsers.put(adminName, new GroupUser(State.ADMIN, adminRef));
+    }
 
     static public Props props(String groupName, String admin) {
         return Props.create(Group.class, () -> new Group(groupName, admin));
@@ -25,63 +36,11 @@ public class Group extends AbstractActor {
         USER,
         MUTED,
     }
-
-    static public class MuteService{
-        public LinkedList<String> mutedUsers;
-        ScheduledExecutorService schd;
-
-        public MuteService() {
-            mutedUsers = new LinkedList<>();
-            schd = Executors.newSingleThreadScheduledExecutor();
-        }
-
-        public void mute(GroupUserMute muteMessage, ActorRef targetActorRef) {
-            Runnable mute = () -> {
-                mutedUsers.add(muteMessage.targetUserName);
-                targetActorRef.tell(new ReceiveTextMessage(muteMessage.sourceUserName, muteMessage.groupName,
-                        "You have been muted for "+muteMessage.time+" in "+muteMessage.groupName+" by "+muteMessage.sourceUserName+"!"),
-                        ActorRef.noSender());
-            };
-            Runnable unMute = () -> {
-                if(mutedUsers.remove(muteMessage.targetUserName))
-                    targetActorRef.tell(new ReceiveTextMessage(muteMessage.sourceUserName, muteMessage.groupName,
-                                    "You have been unmuted! Muting time is up!"),ActorRef.noSender());
-            };
-
-            schd.schedule(mute,0, TimeUnit.SECONDS);
-            schd.schedule(unMute, muteMessage.time, TimeUnit.SECONDS);
-        }
-
-        public void unMute(GroupUserUnMute unMuteMessage, ActorRef targetActorRef) {
-            Runnable unMuteTask = () -> {
-                if(mutedUsers.remove(unMuteMessage.targetUserName))
-                targetActorRef.tell(new ReceiveTextMessage(unMuteMessage.sourceUserName, unMuteMessage.groupName,
-                                "You have been unmuted by "+unMuteMessage.sourceUserName+"!"),ActorRef.noSender());
-            };
-            schd.schedule(unMuteTask,0, TimeUnit.SECONDS);
-        }
-
-        public Boolean isMute(String user) {
-            try {
-            Callable<Boolean> check = () -> {return mutedUsers.contains(user);};
-            Future<Boolean> answer = schd.schedule(check,0,TimeUnit.SECONDS);
-            return answer.get();
-            } catch (Exception e) {
-                return false;
-            }
-        }
-
-        public void shutDown(){
-            schd.shutdown();
-        }
-
-    }
-
     static public class GroupUser {
         public State state;
-        public final ActorRef actorRef;
+        public final ActorSelection actorRef;
 
-        public GroupUser(State state, ActorRef actorRef) {
+        public GroupUser(State state, ActorSelection actorRef) {
             this.state = state;
             this.actorRef = actorRef;
         }
@@ -91,18 +50,7 @@ public class Group extends AbstractActor {
         }
     }
 
-    private String groupName;
-    private String admin;
-    private final HashMap<String, GroupUser> groupUsers;
-    private final MuteService muteService;
 
-    public Group(String groupName, String adminName) {
-        this.groupName = groupName;
-        this.admin = adminName;
-        this.muteService = new MuteService();
-        this.groupUsers = new HashMap<>();
-//        this.groupUsers.put(adminName, new GroupUser(State.ADMIN, adminActorRef));
-    }
 
     @Override
     public Receive createReceive() {
@@ -111,63 +59,63 @@ public class Group extends AbstractActor {
                 .match(GroupLeave.class, this::handleGroupLeave)
                 .match(BasicGroupAdminAction.class, this::basicGroupAdminAction)
                 .match(GroupInviteUser.class, this::handleGroupInviteUser)
-                .match(ResponseToGroupInviteUser.class, this::handleResponseToGroupInviteUser)
+//                .match(ResponseToGroupInviteUser.class, this::handleResponseToGroupInviteUser)
                 .build();
     }
     //got to this func from server when checking validation of the groupInvite
     private void handleGroupInviteUser(GroupInviteUser invitation) {
-        //use flag to make sure that after first error this will be the output error
-        boolean ErrorFLAG = true;
-        String response = "";
-        //check source permission
-        if (groupUsers.get(invitation.sourceUserName).state == State.USER ||
-                groupUsers.get(invitation.sourceUserName).state == State.MUTED) {
-            response = "You are neither an admin nor a co-admin of " + invitation.groupName + "!";
-            ErrorFLAG = false;
-        }
-        //check if source is in group
-        if (ErrorFLAG && !groupUsers.containsKey(invitation.sourceUserName)) {
-            response = invitation.sourceUserName + "is not in " + invitation.groupName + "!";
-            ErrorFLAG = false;
-        }
-        //check if target is NOT in group
-        if (ErrorFLAG && groupUsers.containsKey(invitation.targetUserName)) {
-            response = invitation.targetUserName + "is already in " + invitation.groupName + "!";
-            ErrorFLAG = false;
-        }
-        if (ErrorFLAG) {//if true ->sent to target the request and future for answer
-            Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
-            AskTargetToGroupInviteUser targetRequest = new AskTargetToGroupInviteUser(invitation.groupName,
-                    invitation.sourceUserName, invitation.targetUserName, null);
-            scala.concurrent.Future<Object> answer = Patterns.ask(invitation.targetActorRef, targetRequest, timeout);
-            try {
-                response = (String) Await.result(answer, timeout.duration());
-                switch (response) {
-                    case "Yes":
-                    case "YES":
-                    case "yes":
-                        //if got here -add target to group
-                        groupUsers.put(invitation.targetUserName, new GroupUser(State.USER, invitation.targetActorRef));
-                        //send msg to target
-                        response = "Welcome to " + invitation.groupName + "!";
-                        invitation.targetActorRef.tell(response, getSelf());
-                        response = invitation.targetUserName + " added successfully to " + invitation.groupName + "!";
-                        break;
-                    case "no":
-                    case "NO":
-                    case "No":
-                        response = invitation.targetUserName + " declined to join to group " + invitation.groupName + "!";
-                        break;
-                    default:
-                        response = invitation.targetUserName + " did NOT added to group, his respond to request was: " + response;
-                        break;
-                }
-            } catch (Exception e) {
-                System.out.println(e);
-            }
-
-        }
-        getSender().tell(response, getSelf());
+//        //use flag to make sure that after first error this will be the output error
+//        boolean ErrorFLAG = true;
+//        String response = "";
+//        //check source permission
+//        if (groupUsers.get(invitation.sourceUserName).state == State.USER ||
+//                groupUsers.get(invitation.sourceUserName).state == State.MUTED) {
+//            response = "You are neither an admin nor a co-admin of " + invitation.groupName + "!";
+//            ErrorFLAG = false;
+//        }
+//        //check if source is in group
+//        if (ErrorFLAG && !groupUsers.containsKey(invitation.sourceUserName)) {
+//            response = invitation.sourceUserName + "is not in " + invitation.groupName + "!";
+//            ErrorFLAG = false;
+//        }
+//        //check if target is NOT in group
+//        if (ErrorFLAG && groupUsers.containsKey(invitation.targetUserName)) {
+//            response = invitation.targetUserName + "is already in " + invitation.groupName + "!";
+//            ErrorFLAG = false;
+//        }
+//        if (ErrorFLAG) {//if true ->sent to target the request and future for answer
+//            Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
+//            AskTargetToGroupInviteUser targetRequest = new AskTargetToGroupInviteUser(invitation.groupName,
+//                    invitation.sourceUserName, invitation.targetUserName, null);
+//            scala.concurrent.Future<Object> answer = Patterns.ask(invitation.targetActorRef, targetRequest, timeout);
+//            try {
+//                response = (String) Await.result(answer, timeout.duration());
+//                switch (response) {
+//                    case "Yes":
+//                    case "YES":
+//                    case "yes":
+//                        //if got here -add target to group
+//                        groupUsers.put(invitation.targetUserName, new GroupUser(State.USER, invitation.targetActorRef));
+//                        //send msg to target
+//                        response = "Welcome to " + invitation.groupName + "!";
+//                        invitation.targetActorRef.tell(response, getSelf());
+//                        response = invitation.targetUserName + " added successfully to " + invitation.groupName + "!";
+//                        break;
+//                    case "no":
+//                    case "NO":
+//                    case "No":
+//                        response = invitation.targetUserName + " declined to join to group " + invitation.groupName + "!";
+//                        break;
+//                    default:
+//                        response = invitation.targetUserName + " did NOT added to group, his respond to request was: " + response;
+//                        break;
+//                }
+//            } catch (Exception e) {
+//                System.out.println(e);
+//            }
+//
+//        }
+//        getSender().tell(response, getSelf());
     }
     private String handleGroupCoAdmin(GroupCoAdmin CoadRequest, GroupUser targetUser) {
         String response = "";
@@ -192,10 +140,10 @@ public class Group extends AbstractActor {
         return response;
     }
 
-    private void handleResponseToGroupInviteUser (ResponseToGroupInviteUser invitationConfirm){
-        groupUsers.put(invitationConfirm.targetUserName,
-                new GroupUser(State.USER,invitationConfirm.targetActorRef));
-    }
+//    private void handleResponseToGroupInviteUser (ResponseToGroupInviteUser invitationConfirm){
+//        groupUsers.put(invitationConfirm.targetUserName,
+//                new GroupUser(State.USER,invitationConfirm.targetActorRef));
+//    }
 
 
     private void basicGroupAdminAction(BasicGroupAdminAction basicGroupAdminAction){
@@ -242,21 +190,24 @@ public class Group extends AbstractActor {
     private void handleMessage(GroupMessage groupMessage) {
         ReceiveMessage message = groupMessage.message;
         GroupUser user = groupUsers.get(message.sendFrom);
+        System.out.println("hiiiiiiiiiiiiiiiiiiiii");
         if (user == null)
             getSender().tell(String.format("You are not part of %s!", groupName), getSelf());
         else if (user.state == State.MUTED)
             getSender().tell(String.format("You are muted for <time> in %s!", groupName), getSelf()); // todo CHANGE THE ERROR WITH TIME MUTED
         else
+            getSender().tell("", getSelf());
             sendToAll(message);
     }
 
     private void sendToAll(ReceiveMessage message) {
         GroupUser user;
+        ReceiveTextMessage check = (ReceiveTextMessage)message;
+        System.out.println("DEBUG: to user sent "+ check.message);
         for (Map.Entry<String, GroupUser> entry : groupUsers.entrySet()) {
-            if (!message.sendFrom.equals(entry.getKey())) {
-                user = entry.getValue();
-                user.actorRef.tell(message, getSelf());
-            }
+            user = entry.getValue();
+            System.out.println("DEBUG: to user "+ entry.getKey() + " sent "+ check.message);
+            user.actorRef.tell(message, getSelf());
         }
     }
 
@@ -293,4 +244,14 @@ public class Group extends AbstractActor {
         }
         getSender().tell(response, getSelf());
     }
+    private ActorSelection getActorByName(String userName){
+        if(userName.contains(":")){
+            String[] splitUserName = userName.split(":");
+            return getContext().actorSelection("akka://System@127.0.0.1:"+splitUserName[1]+"/user/" + splitUserName[0]);
+        }
+        else{
+            return getContext().actorSelection("user/" + userName);
+        }
+    }
+
 }

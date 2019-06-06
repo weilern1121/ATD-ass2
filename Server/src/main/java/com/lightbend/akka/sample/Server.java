@@ -70,7 +70,7 @@ public class Server extends AbstractActor {
     if (group == null)
       response = groupMessage.message.userOrGroup + " does not exist!";
     else {
-      Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
+      Timeout timeout = new Timeout(10, TimeUnit.SECONDS);
       Future<Object> answer = Patterns.ask(group, groupMessage, timeout);
       try {
         response = (String) Await.result(answer, timeout.duration());
