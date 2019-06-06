@@ -6,8 +6,10 @@ public class Messages {
 
     static public class Connect implements java.io.Serializable{
         public final String userName;
+        public final String address;
 
-        public Connect(String userName) {
+        public Connect(String userName, String address) {
+            this.address = address;
             this.userName = userName;
         }
     }
@@ -16,6 +18,14 @@ public class Messages {
         public final String userName;
 
         public DisConnect(String userName) {
+            this.userName = userName;
+        }
+    }
+
+    static public class GetAddress implements java.io.Serializable{
+        public final String userName;
+
+        public GetAddress(String userName) {
             this.userName = userName;
         }
     }

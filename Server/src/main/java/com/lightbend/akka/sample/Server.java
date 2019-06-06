@@ -5,6 +5,7 @@ import akka.actor.ActorSelection;
 import akka.actor.Props;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import akka.pattern.Patterns;
 import akka.util.Timeout;
@@ -15,7 +16,7 @@ import scala.concurrent.Future;
 
 public class Server extends AbstractActor {
   private final HashMap<String, ActorRef> groups;
-  private final LinkedList<String> users;
+  private final HashMap<String, String> users;
 
   static public Props props() {
     return Props.create(Server.class, () -> new Server());
@@ -24,26 +25,30 @@ public class Server extends AbstractActor {
 
   public Server() {
     this.groups = new HashMap<>();
-    this.users = new LinkedList<>();
+    this.users = new HashMap<>();
   }
 
   @Override
   public Receive createReceive() {
     return receiveBuilder()
             .match(Connect.class, this::connect)
+            .match(GetAddress.class, this::getAddress)
             .match(DisConnect.class, this::disConnect)
             .match(GroupCreate.class, this::groupCreate)
             .match(GroupMessage.class, this::groupMessage)
-            .match(GroupLeave.class, this::GroupLeave)
+            .match(GroupLeave.class, this::groupLeave)
             .match(GroupInviteUser.class, this::groupInviteUser)
             .match(ResponseToGroupInviteUser.class, this::ResponseToGroupInviteUser)
             .match(BasicGroupAdminAction.class, this::basicGroupAdminAction)
-            .match(String.class, this::test)
             .build();
   }
 
-  private void test(String test) {
-    System.out.println("TESTTT:" + test);
+  private void getAddress(GetAddress getAddress) {
+    String userAdress = users.get(getAddress.userName);
+    if(userAdress == null)
+      getSender().tell("", getSelf());
+    else
+      getSender().tell(userAdress, getSelf());
   }
 
   private void basicGroupAdminAction(BasicGroupAdminAction basicGroupAdminAction) {
@@ -83,19 +88,23 @@ public class Server extends AbstractActor {
 
   private void connect(Connect connect) {
     String response;
-    System.out.println("HIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII");
-    if (users.contains(connect.userName)) {
+    if (users.containsKey(connect.userName)) {
       response = connect.userName + " is in use!";
     } else {
       response = connect.userName + " has connected successfully";
-      users.add(connect.userName);
+      users.put(connect.userName, connect.address);
     }
     getSender().tell(response, getSelf());
   }
 
   private void disConnect(DisConnect disConnect) {
     String response;
-    if (users.contains(disConnect.userName)) {
+    System.out.println("REMOVEEEEE " + disConnect.userName);
+    if (users.containsKey(disConnect.userName)) {
+
+      for (Map.Entry<String, ActorRef> entry : groups.entrySet()) {
+        groupLeave(new GroupLeave(disConnect.userName, entry.getKey()));
+      }
       users.remove(disConnect.userName);
       response = disConnect.userName + " has been disconnected successfully!";
     } else {
@@ -118,37 +127,27 @@ public class Server extends AbstractActor {
   }
 
 
-  private void GroupLeave(GroupLeave groupLeave) {
-    String response = "";
-    if (groups.containsKey(groupLeave.groupName)) { //first- check that the group exists
-      Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
-      Future<Object> answer = Patterns.ask(groups.get(groupLeave.groupName), groupLeave, timeout);
-      try {
-        String result = (String) Await.result(answer, timeout.duration());
-        if (result.equals("Error- not found in group!")) {
-          response = "not found!";
-          //tell the user that have error. TODO -makesure that getsender is user and not the group!
-          getSender().tell(response, getSelf());
-        } else {
-          if (result.equals("admin exit!")) { //if admin exit - remove group from group list
-            groups.remove(groupLeave.groupName);
-          } else {
-            if (result.equals("coadmin exit!")) {
-              response = "coadmin exit!";
-              getSender().tell(response, getSelf());
-            }
-            //TODO  - what to do if succeed? the broadcast should come from server? or inside the group?
-          }
-        }
-      } catch (Exception e) {
-        System.out.println("Error in GroupLeave!");
+  private void groupLeave(GroupLeave groupLeave) {
+    Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
+    Future<Object> answer;
+
+    ActorRef group = groups.get(groupLeave.groupName);
+    if (group == null) {
+      getSender().tell(groupLeave.groupName + " does not exist!", getSelf());
+      return;
+    }
+    answer = Patterns.ask(group, groupLeave, timeout);
+    try {
+      String response = (String) Await.result(answer, timeout.duration());
+      System.out.println("LEAVE RESPONSE " + response);
+      if(response.equals("admin exit!")){
+        groups.remove(groupLeave.groupName);
+        getContext().stop(group);
       }
+      getSender().tell("", getSelf());
+    } catch (Exception e) {
+      System.out.println("groupLeave ERROR: " + e);
     }
-    //TODO  - what to do if succeed? the broadcast should come from server? or inside the group?    }
-    else { //if not found groupName -> imidiate Error to user
-      response = "not found!";
-    }
-    getSender().tell(response, getSelf());
   }
 
   private void groupInviteUser(GroupInviteUser groupInviteUser) {

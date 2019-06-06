@@ -18,6 +18,7 @@ public class User extends AbstractActor {
   private String userName;
   private final ActorSelection server;
 
+
   static public Props props(String userName) {
     return Props.create(User.class, () -> new User(userName));
   }
@@ -25,7 +26,7 @@ public class User extends AbstractActor {
   public User(String userName) {
 
     this.userName = userName;
-    this.server = getContext().actorSelection("akka://System@127.0.0.1:8080/user/Server");
+    this.server = getContext().actorSelection("akka://System@"+UserMain.server_host+":"+UserMain.server_port+"/user/Server");
   }
 
   @Override
@@ -34,7 +35,6 @@ public class User extends AbstractActor {
         .match(ReceiveMessage.class, this::receiveMessage)
         .match(SendMessage.class, this::sendMessage)
         .match(GroupCreate.class, this::groupCreate)
-        .match(Connect.class, this::connect)
         .match(DisConnect.class, this::disConnect)
         .match(GroupLeave.class, this::groupLeave)
         .match(GroupInviteUser.class,this::groupInviteUser)
@@ -58,7 +58,8 @@ public class User extends AbstractActor {
     answer = Patterns.ask(server, basicGroupAction, timeout);
     try {
       String result = (String) Await.result(answer, timeout.duration());
-      System.out.println(result);
+      if(result.length() > 0)
+        System.out.println(result);
     }
     catch (Exception e) {
       System.out.println("server is offline! try again later!");
@@ -70,7 +71,8 @@ public class User extends AbstractActor {
       Future<Object> answer = Patterns.ask(server, groupMessage, timeout);
       try{
           String result = (String) Await.result(answer, timeout.duration());
-          System.out.println(result);
+          if(result.length() > 0)
+            System.out.println(result);
       }
       catch (Exception e){
           System.out.println("server is offline! try again later!");
@@ -81,7 +83,8 @@ public class User extends AbstractActor {
     Future<Object> answer = Patterns.ask(server, groupInviteUser, timeout);
     try {
       String result = (String) Await.result(answer, timeout.duration());
-      System.out.println(result);
+      if(result.length() > 0)
+        System.out.println(result);
     } catch (Exception e) {
       System.out.println("server is offline! try again later!");
     }
@@ -93,37 +96,12 @@ public class User extends AbstractActor {
     Future<Object> answer = Patterns.ask(server, groupLeave, timeout);
     try {
       String result = (String) Await.result(answer, timeout.duration());
-      if (result.equals("not found!")) {
-        System.out.println(this.userName + " is not in " + groupLeave.groupName+"!");
-      } else { //TODO - not sure if need to print or get this by the group broadCast
-        if(result.equals("coadmin exit!"))
-          System.out.println(this.userName + " is removed from co-admin list in " + groupLeave.groupName+"!");
-        else
-          System.out.println(this.userName+" left group: "+groupLeave.sourceUserName);
-      }
+      if(result.length() > 0)
+        System.out.println(result);
     } catch (Exception e) {
       System.out.println("server is offline! try again later!");
     }
-
-
   }
-  private void connect(Connect connect) {
-      Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
-      Future<Object> answer = Patterns.ask(server, connect, timeout);
-      try{
-        String result = (String) Await.result(answer, timeout.duration());
-        if(result.equals(connect.userName + " is in use!")){
-          System.out.println(result);
-        }
-        else{
-          this.userName = connect.userName;
-          System.out.println(result);
-        }
-      }
-      catch (Exception e){
-        System.out.println("server is offline!");
-      }
-    }
 
     private void disConnect(DisConnect disConnect) {
         Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
@@ -147,7 +125,8 @@ public class User extends AbstractActor {
     Future<Object> answer = Patterns.ask(server, groupCreate, timeout);
     try{
       String result = (String) Await.result(answer, timeout.duration());
-      System.out.println(result);
+      if(result.length() > 0)
+        System.out.println(result);
       }
     catch (Exception e){
       System.out.println("server is offline! try again later!");
@@ -202,41 +181,40 @@ public class User extends AbstractActor {
 
   private void receiveFileMessage(String date, ReceiveFileMessage message) {
     try {
-
-      File file = new File("files/");
+      new File("files").mkdirs();
+      File file = new File("files/newFile");
       OutputStream os = new FileOutputStream(file);
       os.write(message.file);
-      System.out.printf("[%s][%s][%s] File received: /files\n", date, message.userOrGroup, getActorName(message.sendFrom));
+      System.out.printf("[%s][%s][%s] File received: /files\n", date, message.userOrGroup, message.sendFrom);
       os.close();
     }
     catch (Exception e){
-      System.out.println("failed to convert file");
+      System.out.println("failed to convert file: "+ e.getMessage());
     }
   }
 
   private void receiveTextMessage(String date, ReceiveTextMessage message) {
-    System.out.printf("[%s][%s][%s] %s\n", date, message.userOrGroup, getActorName(message.sendFrom), message.message);
+    System.out.printf("[%s][%s][%s] %s\n", date, message.userOrGroup, message.sendFrom, message.message);
   }
 
   private ActorSelection getActorByName(String userName){
-    if(userName.contains(":")){
-      String[] splitUserName = userName.split(":");
-      return getContext().actorSelection("akka://System@127.0.0.1:"+splitUserName[1]+"/user/" + splitUserName[0]);
+    Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
+    Future<Object> answer = Patterns.ask(server, new GetAddress(userName), timeout);
+    try{
+      String userAddress = (String) Await.result(answer, timeout.duration());
+      if(userAddress.length() > 0)
+        return getContext().actorSelection("akka://System@"+userAddress+"/user/"+userName);
+      else {
+        System.out.println(userName + "is not connected");
+        return null;
+      }
     }
-    else{
-      return getContext().actorSelection("user/" + userName);
+    catch (Exception e){
+      System.out.println("server is offline! try again later!");
+      return null;
     }
   }
 
-  private String getActorName(String userName){
-    if(userName.contains(":")){
-      String[] splitUserName = userName.split(":");
-      return splitUserName[0];
-    }
-    else{
-      return userName;
-    }
-  }
 
   //-------------------------------------------------------------------------------
 

@@ -4,26 +4,33 @@ import akka.pattern.Patterns;
 import akka.util.Timeout;
 import com.lightbend.akka.sample.Messages.*;
 import scala.concurrent.Await;
+import scala.concurrent.Future;
 
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.concurrent.*;
 
+import static com.lightbend.akka.sample.Group.State.ADMIN;
+
 
 public class Group extends AbstractActor {
     private String groupName;
-    private String admin;
     private final HashMap<String, GroupUser> groupUsers;
     private final MuteService muteService;
+    private final ActorSelection server;
 
     public Group(String groupName, String adminName) {
         this.groupName = groupName;
-        this.admin = adminName;
         this.muteService = new MuteService();
         this.groupUsers = new HashMap<>();
+        this.server = getContext().actorSelection("akka://System@"+ServerMain.host+":"+ServerMain.port+"/user/Server");
         ActorSelection adminRef = getActorByName(adminName);
-        this.groupUsers.put(adminName, new GroupUser(State.ADMIN, adminRef));
+        this.groupUsers.put(adminName, new GroupUser(ADMIN, adminRef));
+
+        //-------------for tests
+//        ActorSelection userRef = getActorByName("t");
+//        this.groupUsers.put("t", new GroupUser(State.USER, userRef));
     }
 
     static public Props props(String groupName, String admin) {
@@ -34,7 +41,6 @@ public class Group extends AbstractActor {
         ADMIN,
         COADMIN,
         USER,
-        MUTED,
     }
     static public class GroupUser {
         public State state;
@@ -152,7 +158,7 @@ public class Group extends AbstractActor {
         String message="";
         if(targetUser == null)
             message = basicGroupAdminAction.targetUserName + " does not exist!";
-        else if ((sourceUser==null) || ((sourceUser.state != State.COADMIN) && (sourceUser.state != State.ADMIN)))
+        else if ((sourceUser==null) || ((sourceUser.state != State.COADMIN) && (sourceUser.state != ADMIN)))
             message = "You are neither an admin nor a co-admin of " + groupName + "!";
         else {
             if (basicGroupAdminAction instanceof GroupUserRemove)
@@ -181,7 +187,7 @@ public class Group extends AbstractActor {
 
     private String groupUserRemove(GroupUserRemove groupUserRemove, GroupUser targetUser) {
         ReceiveTextMessage messagToTarget = new ReceiveTextMessage(groupUserRemove.sourceUserName, groupName,
-                "You have been removed from" + groupName + "by " + groupUserRemove.targetUserName + "!");
+                "You have been removed from " + groupName + " by " + groupUserRemove.targetUserName + "!");
         targetUser.actorRef.tell(messagToTarget, getSelf());
         groupUsers.remove(groupUserRemove.targetUserName);
         return "";
@@ -189,24 +195,24 @@ public class Group extends AbstractActor {
 
     private void handleMessage(GroupMessage groupMessage) {
         ReceiveMessage message = groupMessage.message;
-        GroupUser user = groupUsers.get(message.sendFrom);
-        System.out.println("hiiiiiiiiiiiiiiiiiiiii");
-        if (user == null)
+        String sender = message.sendFrom;
+        GroupUser user = groupUsers.get(sender);
+        if (user == null) {
             getSender().tell(String.format("You are not part of %s!", groupName), getSelf());
-        else if (user.state == State.MUTED)
-            getSender().tell(String.format("You are muted for <time> in %s!", groupName), getSelf()); // todo CHANGE THE ERROR WITH TIME MUTED
-        else
-            getSender().tell("", getSelf());
-            sendToAll(message);
+            return;
+        }
+        else if (muteService.isMute(sender)){
+            getSender().tell(String.format("You are Muted in %s!", groupName), getSelf());
+            return;
+        }
+        getSender().tell("", getSelf());
+        sendToAll(message);
     }
 
     private void sendToAll(ReceiveMessage message) {
         GroupUser user;
-        ReceiveTextMessage check = (ReceiveTextMessage)message;
-        System.out.println("DEBUG: to user sent "+ check.message);
         for (Map.Entry<String, GroupUser> entry : groupUsers.entrySet()) {
             user = entry.getValue();
-            System.out.println("DEBUG: to user "+ entry.getKey() + " sent "+ check.message);
             user.actorRef.tell(message, getSelf());
         }
     }
@@ -214,44 +220,37 @@ public class Group extends AbstractActor {
     private void handleGroupLeave(GroupLeave groupLeaveReaquest){
         String response = "";
         //check that user is in group
-        if(!groupUsers.containsKey(groupLeaveReaquest.sourceUserName)) {
-            response = "Error- not found in group!";
+        GroupUser user = groupUsers.get(groupLeaveReaquest.sourceUserName);
+        if(user == null) {
+            getSender().tell(String.format("You are not part of %s!", groupName), getSelf());
+            return;
         }
-        else {//else - legal request
-            switch (groupUsers.get(groupLeaveReaquest.sourceUserName).state) {
-                case ADMIN://if admin -> close group
-                    //admin validation
-                    if(!admin.equals(groupLeaveReaquest.sourceUserName))
-                        System.out.println("Error in handleGroupLeave: group admin: "+admin+"and "+
-                                groupLeaveReaquest.sourceUserName+" state is ADMIN!");
-                    //broadcast to all group members
-                    handleMessage(new GroupMessage(new ReceiveTextMessage(groupLeaveReaquest.sourceUserName, this.groupName,
-                                    (groupLeaveReaquest.groupName + " admin has closed " + groupLeaveReaquest.groupName + "!"))));
-                    groupUsers.clear(); //clean user list
-                    response = "admin exit!";
-                    break;
-                case COADMIN://send coadmin msg to server->user AND continue to default
-                    response = "coadmin exit!";
-                    getSender().tell(response, getSelf());
-                default:
-                    //broadcast to all group members
-                    handleMessage(new GroupMessage(new ReceiveTextMessage(groupLeaveReaquest.sourceUserName, this.groupName,
-                                    (groupLeaveReaquest.sourceUserName + " has left " +
-                                            groupLeaveReaquest.groupName + "!"))));
-                    groupUsers.remove(groupLeaveReaquest.sourceUserName);//remove from user list
-                    break;
-            }
+        sendToAll(new ReceiveTextMessage(groupLeaveReaquest.sourceUserName, this.groupName,
+                groupLeaveReaquest.sourceUserName + " has left " + groupLeaveReaquest.groupName + "!"));
+        if(user.state == ADMIN){
+            sendToAll(new ReceiveTextMessage(groupLeaveReaquest.sourceUserName, this.groupName,
+                    groupLeaveReaquest.groupName + " admin has closed " + groupLeaveReaquest.groupName + "!"));
+            response = "admin exit!";
         }
+        groupUsers.remove(groupLeaveReaquest.sourceUserName);//remove from user list
         getSender().tell(response, getSelf());
     }
+
     private ActorSelection getActorByName(String userName){
-        if(userName.contains(":")){
-            String[] splitUserName = userName.split(":");
-            return getContext().actorSelection("akka://System@127.0.0.1:"+splitUserName[1]+"/user/" + splitUserName[0]);
+        Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
+        Future<Object> answer = Patterns.ask(server, new GetAddress(userName), timeout);
+        try{
+            String userAddress = (String) Await.result(answer, timeout.duration());
+            if(userAddress.length() > 0)
+                return getContext().actorSelection("akka://System@"+userAddress+"/user/"+userName);
+            else {
+                System.out.println(userName + "is not connected");
+                return null;
+            }
         }
-        else{
-            return getContext().actorSelection("user/" + userName);
+        catch (Exception e){
+            System.out.println("server is offline! try again later!");
+            return null;
         }
     }
-
 }

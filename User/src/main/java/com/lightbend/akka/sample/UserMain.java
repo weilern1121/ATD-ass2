@@ -1,8 +1,6 @@
 package com.lightbend.akka.sample;
-
 import akka.actor.*;
 import akka.pattern.Patterns;
-import akka.remote.RemoteScope;
 import akka.util.Timeout;
 import com.lightbend.akka.sample.Messages.*;
 import com.typesafe.config.Config;
@@ -10,43 +8,53 @@ import com.typesafe.config.ConfigFactory;
 import scala.concurrent.Await;
 import scala.concurrent.Future;
 
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Scanner;
 import java.util.concurrent.TimeUnit;
 
 public class UserMain {
 
+  public static String user_host;
+  public static String user_port;
+  public static String server_host;
+  public static String server_port;
   private static ActorRef user;
   private static ActorSelection server;
   private static ActorSystem system;
   private static String userName;
-  private static String port = null;
+  private static boolean exit = false;
+
+
 
   public static void main(String[] args) {
+    if(args.length < 4){
+      System.out.println("MISSING HOST AND PORTS!");
+      return;
+    }
     Scanner scanner = new Scanner(System.in);
-    boolean exit=false;
+    user_host = args[0];
+    user_port = args[1];
+    server_host = args[2];
+    server_port = args[3];
+    Config conf = handleConfig();
     String[] command;
-    Config conf = ConfigFactory.load("user1.conf");;
-    if(args[0].equals("1")) {
-      conf = ConfigFactory.load("user1.conf");
-      port = "8082";
-    }
-    if(args[0].equals("2")) {
-      conf = ConfigFactory.load("user2.conf");
-      port = "8084";
-    }
-    if(args[0].equals("3")) {
-      conf = ConfigFactory.load("user3.conf");
-      port = "8086";
-    }
 
-    system = ActorSystem.create("System", conf); // todo: need to change to remote SYSTEM!!!!!
 
-    server = system.actorSelection("akka://System@127.0.0.1:8080/user/Server"); // todo: CHANGE PATH!!
+    system = ActorSystem.create("System", conf);
+    server = system.actorSelection("akka://System@"+server_host+":"+server_port+"/user/Server");
 
     try {
       while (!exit) {
         command = scanner.nextLine().split(" ");
+        if((userName == null) && (!command[0].equals("/user")) && (!command[1].equals("connect"))){
+          System.out.println("NEED TO CONNECT FIRST!");
+          continue;
+        }
+
         switch (command[0]){
           case "/user":
             userCommand(command);
@@ -61,7 +69,7 @@ public class UserMain {
       }
     }
     catch (Exception e) {
-      System.out.println(e);
+      System.out.println(e.getMessage());
     }
     finally {
       system.terminate();
@@ -72,10 +80,10 @@ public class UserMain {
   private static void userCommand(String[] command){
     switch (command[1]){
       case "connect":
-        connectToServer(new Connect(command[2]));
+        connectToServer(new Connect(command[2], user_host+":"+user_port));
         break;
       case "disconnect":
-        UserMain.user.tell(new DisConnect(command[2]), ActorRef.noSender());
+        UserMain.user.tell(new DisConnect(userName), ActorRef.noSender());
         break;
       case "text":
         String message = String.join(" ", Arrays.asList(command).subList(3, command.length));
@@ -136,16 +144,55 @@ public class UserMain {
         System.out.println(result);
       }
       else{
-        UserMain.user = UserMain.system.actorOf(User.props(connect.userName),connect.userName); // todo: CHANGE PATH!!
-        if(port != null)
-          UserMain.userName = connect.userName+":"+port;
-        else
-          UserMain.userName = connect.userName;
+        UserMain.user = UserMain.system.actorOf(User.props(connect.userName),connect.userName);
+        UserMain.userName = connect.userName;
         System.out.println(result);
       }
     }
     catch (Exception e){
       System.out.println("server is offline!");
+    }
+  }
+  private static Config handleConfig(){
+    try {
+//      String configPath = "src/main/resources/" + user_host + ":" + user_port + ".conf";
+      String configPath = "src/main/resources/application.conf";
+
+      new File(configPath);
+      String config = "akka {\r\n" +
+              "#loglevel = \"OFF\"\r\n" +
+              "  actor {\r\n" +
+              "  serialize-messages = on\r\n" +
+              "  serializers {\r\n" +
+              "        java = \"akka.serialization.JavaSerializer\"\r\n" +
+              "  }\r\n" +
+              "    provider = \"akka.remote.RemoteActorRefProvider\"\r\n" +
+              "    akka.actor.warn-about-java-serializer-usage = false\r\n" +
+              "  }\r\n" +
+              "  remote {\r\n" +
+              "    artery{\r\n" +
+              "        enabled = on\r\n" +
+              "        transport = tcp\r\n" +
+              "        canonical.hostname = \"" + user_host + "\"\r\n" +
+              "        canonical.port = " + user_port + "\r\n" +
+              "    }\r\n" +
+              "    enabled-transports = [\"akka.remote.netty.tcp\"]\r\n" +
+              "    netty.tcp {\r\n" +
+              "      hostname = \"127.0.0.1\"\r\n" +
+              "      port = 8082\r\n" +
+              "    }\r\n" +
+              "  }\r\n" +
+              "}\r\n";
+      Path path = Paths.get(configPath);
+      BufferedWriter writer = Files.newBufferedWriter(path);
+      writer.write(config);
+      writer.close();
+//      Thread.sleep(4000);
+//      return ConfigFactory.load(user_host + ":" + user_port + ".conf");
+      return ConfigFactory.load("application.conf");
+    }
+    catch (Exception e){
+      return null;
     }
   }
 
