@@ -1,0 +1,78 @@
+Name: Tomer Kulla
+ID: 308235944
+Name: Noam Weiler
+ID: 203570619
+
+ATD ASSIGNMENT 2:
+
+ABOUT:
+	Text-based messages application.
+	Support all the commands as described at: 
+	https://www.cs.bgu.ac.il/~majeek/atd/192/assignments/2/
+
+
+ACTORS:
+	User -
+	fields: 
+		- Username
+		- Server ActorRef (refrence to the main app server)
+	
+	
+	Server - 
+	fields:
+		- Users map, holds each username with his full address.
+		- Groups map, holds each groupname with her ActorRef.
+	
+	Group - 
+	fields:
+		- GroupName
+		- groupUsers map, holds each group user's username with his ActoRef(Actor Selection in this case) and his state(ADMIN,COADMIN or USER).
+		- Server ActorRef (refrence to the main app server)
+		- MuteService, a singel threaded app that controls and holds the info regrading muted group members.
+
+
+
+ACTORS DESIGN:
+	The main app server has a singlton Server Actor.
+	Each User, once he has conncted to the server, has his own unique User Actor.
+	Users Actors can connect directly with each other (e.g when sending text/file messages),
+	and also to the server (to do group actions etc).
+	groups are created by the Server Actor, and they are the server's childrens (not the system's),
+	groups receive messages only from the Server Actor.
+
+
+
+MESSAGES:
+ 	Each command has described in the assignment page has her unique Object Message,
+	The messages are passed between the actors and affect thier behave has described in assignment..
+	each Message contains her relevence fields so she can pass all her relevence data.
+	Message Objects:
+		- Connect
+		- DisConnect
+		- Get Address (not from the assignment page, it's to get the user's address from the server)
+		- Send Message
+		- GroupCreate
+		- GroupLeave
+		- GroupInviteUser
+		- GroupCOAdmin
+		- GroupUserRemove
+		- GroupUserMute
+		- GroupUserUnMute 	
+	
+
+
+HOW TO RUN:
+
+	To Start Server:
+	inside Server folder-
+	run - mvn clean install
+	and then - mvn exec:exec -Dhost=<server_host> -Dport=<server_port>
+	EXAMPLE: mvn exec:exec -Dhost=127.0.0.1 -Dport=8080.
+
+	To Start User:
+	inside User folder-
+	run - mvn clean install
+	and then - mvn exec:exec mvn exec:exec -Duser_host=<user_host> -Dserver_address=<server_full_adress> 
+	EXAMPLE: mvn exec:exec -Duser_host=127.0.0.1 -Dserver_address=127.0.0.1:8080
+
+

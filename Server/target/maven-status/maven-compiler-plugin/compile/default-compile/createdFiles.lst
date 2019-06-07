@@ -15,9 +15,11 @@ com/lightbend/akka/sample/Messages$BasicGroupAdminAction.class
 com/lightbend/akka/sample/Messages$GroupLeave.class
 com/lightbend/akka/sample/Messages$ReceiveMessage.class
 com/lightbend/akka/sample/Messages$GroupMessage.class
+com/lightbend/akka/sample/Messages$GetAddress.class
 com/lightbend/akka/sample/Group$State.class
 com/lightbend/akka/sample/Messages$AskTargetToGroupInviteUser.class
 com/lightbend/akka/sample/Messages.class
+com/lightbend/akka/sample/MuteService.class
 com/lightbend/akka/sample/Messages$ResponseToGroupInviteUser.class
 com/lightbend/akka/sample/Messages$SendMessage.class
 com/lightbend/akka/sample/Messages$GroupUserMute.class
