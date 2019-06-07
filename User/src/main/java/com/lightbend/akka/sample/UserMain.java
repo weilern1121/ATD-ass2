@@ -84,6 +84,7 @@ public class UserMain {
         break;
       case "disconnect":
         UserMain.user.tell(new DisConnect(userName), ActorRef.noSender());
+        userName=null;
         break;
       case "text":
         String message = String.join(" ", Arrays.asList(command).subList(3, command.length));

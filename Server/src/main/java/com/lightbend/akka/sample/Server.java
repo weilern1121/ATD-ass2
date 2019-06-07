@@ -36,7 +36,7 @@ public class Server extends AbstractActor {
             .match(DisConnect.class, this::disConnect)
             .match(GroupCreate.class, this::groupCreate)
             .match(GroupMessage.class, this::groupMessage)
-            .match(GroupLeave.class, this::groupLeave)
+            .match(GroupLeave.class, (GroupLeave groupLeave) -> groupLeave(groupLeave, false))
             .match(GroupInviteUser.class, this::groupInviteUser)
             .match(ResponseToGroupInviteUser.class, this::ResponseToGroupInviteUser)
             .match(BasicGroupAdminAction.class, this::basicGroupAdminAction)
@@ -57,6 +57,7 @@ public class Server extends AbstractActor {
 
     ActorRef group = groups.get(basicGroupAdminAction.groupName);
     if (group == null) {
+      System.out.println("HEREEE1");
       getSender().tell(basicGroupAdminAction.groupName + " does not exist!", getSelf());
       return;
     }
@@ -72,8 +73,10 @@ public class Server extends AbstractActor {
   private void groupMessage(GroupMessage groupMessage) {
     String response = "";
     ActorRef group = groups.get(groupMessage.message.userOrGroup);
-    if (group == null)
+    if (group == null) {
+      System.out.println("HEREEE2");
       response = groupMessage.message.userOrGroup + " does not exist!";
+    }
     else {
       Timeout timeout = new Timeout(10, TimeUnit.SECONDS);
       Future<Object> answer = Patterns.ask(group, groupMessage, timeout);
@@ -99,15 +102,15 @@ public class Server extends AbstractActor {
 
   private void disConnect(DisConnect disConnect) {
     String response;
-    System.out.println("REMOVEEEEE " + disConnect.userName);
     if (users.containsKey(disConnect.userName)) {
 
       for (Map.Entry<String, ActorRef> entry : groups.entrySet()) {
-        groupLeave(new GroupLeave(disConnect.userName, entry.getKey()));
+        groupLeave(new GroupLeave(entry.getKey(), disConnect.userName), true);
       }
       users.remove(disConnect.userName);
       response = disConnect.userName + " has been disconnected successfully!";
-    } else {
+    }
+    else {
       response = disConnect.userName + " failed to disconnect";
     }
     getSender().tell(response, getSelf());
@@ -127,25 +130,27 @@ public class Server extends AbstractActor {
   }
 
 
-  private void groupLeave(GroupLeave groupLeave) {
+  private void groupLeave(GroupLeave groupLeave, boolean disconnect) {
     Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
     Future<Object> answer;
 
     ActorRef group = groups.get(groupLeave.groupName);
     if (group == null) {
-      getSender().tell(groupLeave.groupName + " does not exist!", getSelf());
+      if(!disconnect)
+        getSender().tell(groupLeave.groupName + " does not exist!", getSelf());
       return;
     }
     answer = Patterns.ask(group, groupLeave, timeout);
     try {
       String response = (String) Await.result(answer, timeout.duration());
-      System.out.println("LEAVE RESPONSE " + response);
       if(response.equals("admin exit!")){
         groups.remove(groupLeave.groupName);
         getContext().stop(group);
       }
-      getSender().tell("", getSelf());
-    } catch (Exception e) {
+      if(!disconnect)
+        getSender().tell("", getSelf());
+    }
+    catch (Exception e) {
       System.out.println("groupLeave ERROR: " + e);
     }
   }

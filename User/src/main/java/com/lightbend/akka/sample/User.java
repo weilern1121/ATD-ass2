@@ -104,12 +104,13 @@ public class User extends AbstractActor {
   }
 
     private void disConnect(DisConnect disConnect) {
-        Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
+        Timeout timeout = new Timeout(10000, TimeUnit.MILLISECONDS);
         Future<Object> answer = Patterns.ask(server, disConnect, timeout);
         try{
           String result = (String) Await.result(answer, timeout.duration());
           if((disConnect.userName.equals(this.userName)) && result.equals(disConnect.userName + " has been disconnected successfully!")){
             System.out.println(result);
+            getContext().stop(getSelf());
           }
           else{
             System.out.println(disConnect.userName + " failed to disconnect");

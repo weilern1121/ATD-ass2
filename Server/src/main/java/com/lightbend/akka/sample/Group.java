@@ -29,8 +29,8 @@ public class Group extends AbstractActor {
         this.groupUsers.put(adminName, new GroupUser(ADMIN, adminRef));
 
         //-------------for tests
-//        ActorSelection userRef = getActorByName("t");
-//        this.groupUsers.put("t", new GroupUser(State.USER, userRef));
+        ActorSelection userRef = getActorByName("t");
+        this.groupUsers.put("t", new GroupUser(State.USER, userRef));
     }
 
     static public Props props(String groupName, String admin) {
