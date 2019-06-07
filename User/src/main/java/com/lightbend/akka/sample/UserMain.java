@@ -5,10 +5,11 @@ import akka.util.Timeout;
 import com.lightbend.akka.sample.Messages.*;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
+
 import scala.concurrent.Await;
 import scala.concurrent.Future;
-
 import java.io.*;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -20,8 +21,7 @@ public class UserMain {
 
   public static String user_host;
   public static String user_port;
-  public static String server_host;
-  public static String server_port;
+  public static String server_address;
   private static ActorRef user;
   private static ActorSelection server;
   private static ActorSystem system;
@@ -29,25 +29,38 @@ public class UserMain {
   private static boolean exit = false;
 
 
-
+  private static void systemConnect(){
+    int count = 0;
+    handleConfig();
+    Config conf = ConfigFactory.load("application.conf");
+    conf.resolve();
+    while(true) {
+      try {
+        system = ActorSystem.create("System", conf);
+        user_port = Integer.toString((Integer)system.provider().getDefaultAddress().port().get());
+        break;
+      } catch (Exception e) {
+        System.out.println(e.getMessage());
+        handleConfig();
+        conf = ConfigFactory.load("application.conf");
+        if (++count == 5)
+          throw e;
+      }
+    }
+  }
   public static void main(String[] args) {
-    if(args.length < 4){
-      System.out.println("MISSING HOST AND PORTS!");
+    if(args.length < 2){
+      System.out.println("MISSING ARGS!");
       return;
     }
     Scanner scanner = new Scanner(System.in);
     user_host = args[0];
-    user_port = args[1];
-    server_host = args[2];
-    server_port = args[3];
-    Config conf = handleConfig();
+    server_address = args[1];
     String[] command;
-
-
-    system = ActorSystem.create("System", conf);
-    server = system.actorSelection("akka://System@"+server_host+":"+server_port+"/user/Server");
-
     try {
+      systemConnect();
+      server = system.actorSelection("akka://System@"+server_address+"/user/Server");
+      System.out.println("Server address: " + server_address +"\n" + "User address: " + user_host+":"+ user_port);
       while (!exit) {
         command = scanner.nextLine().split(" ");
         if((userName == null) && (!command[0].equals("/user")) && (!command[1].equals("connect"))){
@@ -91,7 +104,7 @@ public class UserMain {
         UserMain.user.tell(new SendTextMessage(command[2], message), ActorRef.noSender());
         break;
       case "file":
-        UserMain.user.tell(new Messages.SendFileMessage(command[2], command[3]), ActorRef.noSender());
+        UserMain.user.tell(new Messages.SendFileMessage(command[2], fileToBytes(command[3])), ActorRef.noSender());
         break;
     }
   }
@@ -110,8 +123,8 @@ public class UserMain {
                     ActorRef.noSender());
             break;
           case "file":
-            //          UserMain.user.tell(new GroupMessage(new ReceiveFileMessage(userName, command[3], command[4])),
-            //                  ActorRef.noSender());
+            UserMain.user.tell(new GroupMessage(new ReceiveFileMessage(userName, command[3], fileToBytes(command[4]))),
+                    ActorRef.noSender());
             break;
         }
         break;
@@ -136,10 +149,26 @@ public class UserMain {
           break;
     }
   }
+
+  private static byte[] fileToBytes(String path){
+    try {
+      File file = new File(path);
+      byte[] bytesArray = new byte[(int) file.length()];
+      FileInputStream fis = new FileInputStream(file); //todo: THIS SHOULD BE IN THE MAIN!!!!
+      fis.read(bytesArray); //read file into bytes[]
+      fis.close();
+      return bytesArray;
+    }
+    catch (Exception e){
+      System.out.println(path + " does not exist!");
+      return null;
+    }
+  }
+
   private static void connectToServer(Connect connect){
     Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
-    Future<Object> answer = Patterns.ask(server, connect, timeout);
     try{
+      Future<Object> answer = Patterns.ask(server, connect, timeout);
       String result = (String) Await.result(answer, timeout.duration());
       if(result.equals(connect.userName + " is in use!")){
         System.out.println(result);
@@ -154,46 +183,41 @@ public class UserMain {
       System.out.println("server is offline!");
     }
   }
-  private static Config handleConfig(){
+  private static void handleConfig(){
     try {
-//      String configPath = "src/main/resources/" + user_host + ":" + user_port + ".conf";
       String configPath = "src/main/resources/application.conf";
-
-      new File(configPath);
       String config = "akka {\r\n" +
-              "#loglevel = \"OFF\"\r\n" +
+              "loglevel = \"OFF\"\r\n" +
               "  actor {\r\n" +
               "  serialize-messages = on\r\n" +
               "  serializers {\r\n" +
               "        java = \"akka.serialization.JavaSerializer\"\r\n" +
               "  }\r\n" +
               "    provider = \"akka.remote.RemoteActorRefProvider\"\r\n" +
-              "    akka.actor.warn-about-java-serializer-usage = false\r\n" +
+              "    warn-about-java-serializer-usage = false\r\n" +
               "  }\r\n" +
               "  remote {\r\n" +
               "    artery{\r\n" +
               "        enabled = on\r\n" +
               "        transport = tcp\r\n" +
               "        canonical.hostname = \"" + user_host + "\"\r\n" +
-              "        canonical.port = " + user_port + "\r\n" +
+              "        canonical.port = 0\r\n" +
               "    }\r\n" +
               "    enabled-transports = [\"akka.remote.netty.tcp\"]\r\n" +
               "    netty.tcp {\r\n" +
-              "      hostname = \"127.0.0.1\"\r\n" +
-              "      port = 8082\r\n" +
+              "      hostname = \"" + user_host + "\"\r\n" +
+              "      port = 0\r\n" +
               "    }\r\n" +
               "  }\r\n" +
               "}\r\n";
-      Path path = Paths.get(configPath);
-      BufferedWriter writer = Files.newBufferedWriter(path);
-      writer.write(config);
-      writer.close();
-//      Thread.sleep(4000);
-//      return ConfigFactory.load(user_host + ":" + user_port + ".conf");
-      return ConfigFactory.load("application.conf");
+        Path path = Paths.get(configPath);
+        BufferedWriter writer = Files.newBufferedWriter(path);
+        writer.write(config);
+        writer.flush();
+        writer.close();
     }
     catch (Exception e){
-      return null;
+      System.out.println(e.getMessage());
     }
   }
 

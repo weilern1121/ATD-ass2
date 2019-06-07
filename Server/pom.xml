@@ -52,7 +52,9 @@
                     <arguments>
                         <argument>-classpath</argument>
                         <classpath/>
-                        <argument>com.lightbend.akka.sample.AkkaQuickstart</argument>
+                        <argument>com.lightbend.akka.sample.ServerMain</argument>
+                        <argument>${host}</argument>
+                        <argument>${port}</argument>
                     </arguments>
                 </configuration>
             </plugin>

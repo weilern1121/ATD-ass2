@@ -1,4 +1,3 @@
-com/lightbend/akka/sample/Group$MuteService.class
 com/lightbend/akka/sample/Messages$DisConnect.class
 com/lightbend/akka/sample/Messages$GroupUserUnMute.class
 com/lightbend/akka/sample/Messages$GroupInviteUser.class
@@ -24,4 +23,3 @@ com/lightbend/akka/sample/Messages$SendMessage.class
 com/lightbend/akka/sample/Messages$GroupUserMute.class
 com/lightbend/akka/sample/Messages$ReceiveTextMessage.class
 com/lightbend/akka/sample/Messages$ReceiveFileMessage.class
-com/lightbend/akka/sample/Group$1.class

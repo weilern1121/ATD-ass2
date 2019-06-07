@@ -50,11 +50,11 @@ public class Messages {
     }
 
     static public class SendFileMessage extends SendMessage implements java.io.Serializable{
-        public final String path;
+        public final byte[] file;
 
-        public SendFileMessage(String sendTo, String path) {
+        public SendFileMessage(String sendTo, byte[] file) {
             super(sendTo);
-            this.path = path;
+            this.file = file;
         }
     }
 

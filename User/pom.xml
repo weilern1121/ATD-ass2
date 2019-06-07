@@ -53,6 +53,8 @@
                         <argument>-classpath</argument>
                         <classpath/>
                         <argument>com.lightbend.akka.sample.UserMain</argument>
+                        <argument>${user_host}</argument>
+                        <argument>${server_address}</argument>
                     </arguments>
                 </configuration>
             </plugin>

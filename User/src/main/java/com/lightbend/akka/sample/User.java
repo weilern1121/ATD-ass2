@@ -26,7 +26,7 @@ public class User extends AbstractActor {
   public User(String userName) {
 
     this.userName = userName;
-    this.server = getContext().actorSelection("akka://System@"+UserMain.server_host+":"+UserMain.server_port+"/user/Server");
+    this.server = getContext().actorSelection("akka://System@"+UserMain.server_address+"/user/Server");
   }
 
   @Override
@@ -146,17 +146,14 @@ public class User extends AbstractActor {
 
   private void sendFileMessage(ActorSelection sendTo, SendFileMessage message) {
     try {
-      File file = new File(message.path);
-      byte[] bytesArray = new byte[(int) file.length()];
-      FileInputStream fis = new FileInputStream(file); //todo: THIS SHOULD BE IN THE MAIN!!!!
-      fis.read(bytesArray); //read file into bytes[]
-      fis.close();
-      sendTo.tell(new ReceiveFileMessage(this.userName,"user", bytesArray), getSelf());
+      sendTo.tell(new ReceiveFileMessage(this.userName,"user", message.file), getSelf());
     }
     catch (Exception e){
-      System.out.println(message.path + " does not exist!");
+      System.out.println(message.sendTo + " does not exist!");
     }
   }
+
+
 
   private void sendTextMessage(ActorSelection sendTo, SendTextMessage message) {
     try{

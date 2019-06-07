@@ -33,7 +33,6 @@ public class ServerMain {
 
         try {
             ActorRef server = system.actorOf(Server.props(), "Server");
-
             System.out.println(">>> Press ENTER to exit <<<");
             System.in.read();
         } catch (IOException ioe) {
@@ -47,14 +46,14 @@ public class ServerMain {
             String configPath = "src/main/resources/application.conf";
             new File(configPath);
             String config = "akka {\r\n" +
-                    "#loglevel = \"OFF\"\r\n" +
+                    "loglevel = \"OFF\"\r\n" +
                     "  actor {\r\n" +
                     "  serialize-messages = on\r\n" +
                     "  serializers {\r\n" +
                     "        java = \"akka.serialization.JavaSerializer\"\r\n" +
                     "  }\r\n" +
                     "    provider = \"akka.remote.RemoteActorRefProvider\"\r\n" +
-                    "    akka.actor.warn-about-java-serializer-usage = false\r\n" +
+                    "    warn-about-java-serializer-usage = false\r\n" +
                     "  }\r\n" +
                     "  remote {\r\n" +
                     "    artery{\r\n" +
@@ -73,6 +72,7 @@ public class ServerMain {
             Path path = Paths.get(configPath);
             BufferedWriter writer = Files.newBufferedWriter(path);
             writer.write(config);
+            writer.flush();
             writer.close();
             return ConfigFactory.load("application.conf");
         } catch (Exception e) {
