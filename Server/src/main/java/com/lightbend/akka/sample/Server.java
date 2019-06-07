@@ -57,7 +57,6 @@ public class Server extends AbstractActor {
 
     ActorRef group = groups.get(basicGroupAdminAction.groupName);
     if (group == null) {
-      System.out.println("HEREEE1");
       getSender().tell(basicGroupAdminAction.groupName + " does not exist!", getSelf());
       return;
     }
@@ -74,7 +73,6 @@ public class Server extends AbstractActor {
     String response = "";
     ActorRef group = groups.get(groupMessage.message.userOrGroup);
     if (group == null) {
-      System.out.println("HEREEE2");
       response = groupMessage.message.userOrGroup + " does not exist!";
     }
     else {
