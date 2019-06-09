@@ -25,6 +25,8 @@ public class UserMain {
   private static ActorSystem system;
   private static String userName;
   private static boolean exit = false;
+  public static boolean groupInviteFlag = false;
+  public static String groupInviteName;
 
 
   private static void systemConnect(){
@@ -59,12 +61,23 @@ public class UserMain {
       systemConnect();
       server = system.actorSelection("akka://System@"+server_address+"/user/Server");
       System.out.println("Server address: " + server_address +"\n" + "User address: " + user_host+":"+ user_port);
+
       while (!exit) {
-        command = scanner.nextLine().split(" ");
+          command = scanner.nextLine().split(" ");
         if((userName == null) && (!command[0].equals("/user")) && (!command[1].equals("connect"))){
           System.out.println("NEED TO CONNECT FIRST!");
           continue;
         }
+      if(groupInviteFlag) {
+          if((!command[0].equals("yes")) && (!command[0].equals("no"))) {
+              System.out.println("RESPONSE TO THE INVITE FIRST!");
+              continue;
+          }
+          if(command[0].equals("yes"))
+            server.tell(new ResponseToGroupInviteUser(groupInviteName, userName), ActorRef.noSender());
+          groupInviteFlag = false;
+          groupInviteName = null;
+      }
 
         switch (command[0]){
           case "/user":
@@ -117,7 +130,8 @@ public class UserMain {
       case "send":
         switch(command[2]){
           case "text":
-            UserMain.user.tell(new GroupMessage(new ReceiveTextMessage(userName, command[3], command[4])),
+            String message = String.join(" ", Arrays.asList(command).subList(4, command.length));
+            UserMain.user.tell(new GroupMessage(new ReceiveTextMessage(userName, command[3], message)),
                     ActorRef.noSender());
             break;
           case "file":
@@ -129,7 +143,7 @@ public class UserMain {
       case "user":
         switch(command[2]){
           case "invite":
-//            UserMain.user.tell(new GroupInviteUser(command[3], userName, command[4]), ActorRef.noSender());
+            UserMain.user.tell(new GroupInviteUser(command[3], userName, command[4]), ActorRef.noSender());
             break;
           case "remove":
             UserMain.user.tell(new GroupUserRemove(command[3], command[4]), ActorRef.noSender());

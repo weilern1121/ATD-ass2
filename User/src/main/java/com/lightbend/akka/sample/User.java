@@ -1,6 +1,5 @@
 package com.lightbend.akka.sample;
 import akka.actor.AbstractActor;
-import akka.actor.ActorRef;
 import akka.actor.ActorSelection;
 import akka.actor.Props;
 import akka.pattern.Patterns;
@@ -11,7 +10,6 @@ import com.lightbend.akka.sample.Messages.*;
 import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.Scanner;
 import java.util.concurrent.TimeUnit;
 
 public class User extends AbstractActor {
@@ -39,15 +37,22 @@ public class User extends AbstractActor {
         .match(GroupLeave.class, this::groupLeave)
         .match(GroupInviteUser.class,this::groupInviteUser)
         .match(BasicGroupAdminAction.class, this::basicGroupAdminAction)
-//        .match(ResponseToGroupInviteUser.class, this::responseToGroupInviteUser)
+        .match(ReceiveGroupInviteUser.class, this::receiveGroupInviteUser)
         .match(GroupMessage.class, this::groupMessage)
+        .match(String.class, this::stringPrinter)
         .build();
   }
 
-  private void responseToGroupInviteUser(AskTargetToGroupInviteUser responseToGroupInviteUser){
-    System.out.println("You have been invited to "+ responseToGroupInviteUser.groupName+", Accept? [Yes]/[No]");
-    String response = new Scanner(System.in).nextLine(); //yes/no answer input
-    getSender().tell(response, getSelf()); //send answer to server
+  private void stringPrinter(String message){
+    System.out.println(message);
+  }
+
+  private void receiveGroupInviteUser(ReceiveGroupInviteUser receiveGroupInviteUser){
+    System.out.println("You have been invited to "+ receiveGroupInviteUser.invite.groupName+", Accept? [Yes]/[No]");
+    while(UserMain.groupInviteFlag ){} // todo: CHANGE MUTEX
+    UserMain.groupInviteFlag = true;
+    UserMain.groupInviteName = receiveGroupInviteUser.invite.groupName;
+
   }
 
   private void basicGroupAdminAction(BasicGroupAdminAction basicGroupAction){

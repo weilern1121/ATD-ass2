@@ -2,13 +2,8 @@ package com.lightbend.akka.sample;
 
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
-import com.lightbend.akka.sample.Messages.Connect;
-import com.lightbend.akka.sample.Messages.DisConnect;
-import com.lightbend.akka.sample.Messages.GroupCreate;
-import com.lightbend.akka.sample.Messages.SendTextMessage;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
-
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;

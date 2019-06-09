@@ -1,7 +1,5 @@
 package com.lightbend.akka.sample;
 
-import akka.actor.ActorRef;
-
 public class Messages {
 
     static public class Connect implements java.io.Serializable{
@@ -98,44 +96,34 @@ public class Messages {
             this.sourceUserName = sourceUserName;
         }
     }
+    static public class ReceiveGroupInviteUser implements java.io.Serializable{
+        public GroupInviteUser invite;
+
+        public ReceiveGroupInviteUser(GroupInviteUser invite) {
+            this.invite = invite;
+        }
+    }
 
     static public class GroupInviteUser implements java.io.Serializable{
         public final String groupName;
         public final String sourceUserName;
         public final String targetUserName;
-        public ActorRef targetActorRef;
 
-        public GroupInviteUser(String groupName, String sourceUserName, String targetUserName, ActorRef ref) {
+        public GroupInviteUser(String groupName, String sourceUserName, String targetUserName) {
             this.groupName = groupName;
             this.sourceUserName = sourceUserName;
             this.targetUserName = targetUserName;
-            this.targetActorRef = ref;
-        }
-        public void setActorRef(ActorRef ref){
-            this.targetActorRef=ref;
-        }
-    }
-
-    static public class AskTargetToGroupInviteUser extends GroupInviteUser implements java.io.Serializable{
-        public AskTargetToGroupInviteUser(String groupName, String sourceUserName, String targetUserName, ActorRef ref) {
-            super(groupName, sourceUserName, targetUserName, ref);
         }
     }
 
 
     static public class ResponseToGroupInviteUser implements java.io.Serializable{
         public final String groupName;
-        public final String sourceUserName;
-        public final String targetUserName;
-        public final String answer;
-        public final ActorRef targetActorRef;
+        public final String userName;
 
-        public ResponseToGroupInviteUser(String groupName, String sourceUserName, String targetUserName, String ans, ActorRef actorref) {
+        public ResponseToGroupInviteUser(String groupName, String userName) {
             this.groupName = groupName;
-            this.sourceUserName = sourceUserName;
-            this.targetUserName = targetUserName;
-            this.answer = ans;
-            this.targetActorRef = actorref;
+            this.userName = userName;
         }
     }
 

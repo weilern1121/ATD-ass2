@@ -29,8 +29,8 @@ public class Group extends AbstractActor {
         this.groupUsers.put(adminName, new GroupUser(ADMIN, adminRef));
 
         //-------------for tests
-        ActorSelection userRef = getActorByName("t");
-        this.groupUsers.put("t", new GroupUser(State.USER, userRef));
+//        ActorSelection userRef = getActorByName("t");
+//        this.groupUsers.put("t", new GroupUser(State.USER, userRef));
     }
 
     static public Props props(String groupName, String admin) {
@@ -65,91 +65,64 @@ public class Group extends AbstractActor {
                 .match(GroupLeave.class, this::handleGroupLeave)
                 .match(BasicGroupAdminAction.class, this::basicGroupAdminAction)
                 .match(GroupInviteUser.class, this::handleGroupInviteUser)
-//                .match(ResponseToGroupInviteUser.class, this::handleResponseToGroupInviteUser)
+                .match(ResponseToGroupInviteUser.class, this::responseToGroupInviteUser)
                 .build();
     }
     //got to this func from server when checking validation of the groupInvite
     private void handleGroupInviteUser(GroupInviteUser invitation) {
-//        //use flag to make sure that after first error this will be the output error
-//        boolean ErrorFLAG = true;
-//        String response = "";
-//        //check source permission
-//        if (groupUsers.get(invitation.sourceUserName).state == State.USER ||
-//                groupUsers.get(invitation.sourceUserName).state == State.MUTED) {
-//            response = "You are neither an admin nor a co-admin of " + invitation.groupName + "!";
-//            ErrorFLAG = false;
-//        }
-//        //check if source is in group
-//        if (ErrorFLAG && !groupUsers.containsKey(invitation.sourceUserName)) {
-//            response = invitation.sourceUserName + "is not in " + invitation.groupName + "!";
-//            ErrorFLAG = false;
-//        }
-//        //check if target is NOT in group
-//        if (ErrorFLAG && groupUsers.containsKey(invitation.targetUserName)) {
-//            response = invitation.targetUserName + "is already in " + invitation.groupName + "!";
-//            ErrorFLAG = false;
-//        }
-//        if (ErrorFLAG) {//if true ->sent to target the request and future for answer
-//            Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
-//            AskTargetToGroupInviteUser targetRequest = new AskTargetToGroupInviteUser(invitation.groupName,
-//                    invitation.sourceUserName, invitation.targetUserName, null);
-//            scala.concurrent.Future<Object> answer = Patterns.ask(invitation.targetActorRef, targetRequest, timeout);
-//            try {
-//                response = (String) Await.result(answer, timeout.duration());
-//                switch (response) {
-//                    case "Yes":
-//                    case "YES":
-//                    case "yes":
-//                        //if got here -add target to group
-//                        groupUsers.put(invitation.targetUserName, new GroupUser(State.USER, invitation.targetActorRef));
-//                        //send msg to target
-//                        response = "Welcome to " + invitation.groupName + "!";
-//                        invitation.targetActorRef.tell(response, getSelf());
-//                        response = invitation.targetUserName + " added successfully to " + invitation.groupName + "!";
-//                        break;
-//                    case "no":
-//                    case "NO":
-//                    case "No":
-//                        response = invitation.targetUserName + " declined to join to group " + invitation.groupName + "!";
-//                        break;
-//                    default:
-//                        response = invitation.targetUserName + " did NOT added to group, his respond to request was: " + response;
-//                        break;
-//                }
-//            } catch (Exception e) {
-//                System.out.println(e);
-//            }
-//
-//        }
-//        getSender().tell(response, getSelf());
+        GroupUser targetUser = groupUsers.get(invitation.targetUserName);
+        GroupUser sourceUser = groupUsers.get(invitation.sourceUserName);
+        String message="";
+        if(targetUser != null)
+            message = invitation.targetUserName + " is already group!";
+        else if ((sourceUser==null) || ((sourceUser.state != State.COADMIN) && (sourceUser.state != ADMIN)))
+            message = "You are neither an admin nor a co-admin of " + groupName + "!";
+        else
+            message = "";
+        getSender().tell(message, getSelf());
     }
     private String handleGroupCoAdmin(GroupCoAdmin CoadRequest, GroupUser targetUser) {
         String response = "";
+        boolean alreadyFLAG=true;
         if (CoadRequest.requestType.equals("add")) {
+            if(groupUsers.get(CoadRequest.targetUserName).state == State.COADMIN)
+                alreadyFLAG=false;
             groupUsers.get(CoadRequest.targetUserName).setState(State.COADMIN);
-            //TODO - <targetusername> will be be added to the <groupname> co-admin list ??
             //send message to target
-            response = "You have been promoted to co-admin in " + CoadRequest.groupName + "!";
-            targetUser.actorRef.tell(response, getSelf());
-            response = "Succeed - promoted "+CoadRequest.sourceUserName+" to COADMIN!"; //set response to source
+            if(alreadyFLAG) {
+                response = "You have been promoted to co-admin in " + CoadRequest.groupName + "!";
+                targetUser.actorRef.tell(response, getSelf());
+                response = "Succeed - promoted " + CoadRequest.sourceUserName + " to COADMIN!"; //set response to source
+            }
+            else{
+                response = CoadRequest.sourceUserName + " is already COADMIN!"; //set response to source
+            }
         }
         //if true - demote target to co-admin
         if (CoadRequest.requestType.equals("remove")) {
+            if(groupUsers.get(CoadRequest.targetUserName).state != State.COADMIN)
+                alreadyFLAG=false;
             groupUsers.get(CoadRequest.targetUserName).setState(State.USER);
-            //TODO - <targetusername> will be be removed to the <groupname> co-admin list ??
-            //send message to target
-            response = "You have been demoted to user in " + CoadRequest.groupName + "!";
-            targetUser.actorRef.tell(response, getSelf());
-            response = "Succeed - demoted "+CoadRequest.targetUserName+" back to USER!";
+
+            if(alreadyFLAG) {
+                //send message to target
+                response = "You have been demoted to user in " + CoadRequest.groupName + "!";
+                targetUser.actorRef.tell(response, getSelf());
+                response = "Succeed - demoted " + CoadRequest.targetUserName + " back to USER!";
+            }
+            else{
+                response = CoadRequest.targetUserName + " is not COADMIN!";
+            }
         }
-//        getSender().tell(response, getSelf());
         return response;
     }
 
-//    private void handleResponseToGroupInviteUser (ResponseToGroupInviteUser invitationConfirm){
-//        groupUsers.put(invitationConfirm.targetUserName,
-//                new GroupUser(State.USER,invitationConfirm.targetActorRef));
-//    }
+    private void responseToGroupInviteUser (ResponseToGroupInviteUser responseToGroupInviteUser){
+        String userName = responseToGroupInviteUser.userName;
+        ActorSelection userRef = getActorByName(userName);
+        this.groupUsers.put(userName, new GroupUser(State.USER, userRef));
+        userRef.tell("Welcome to " + groupName +"!", getSelf());
+    }
 
 
     private void basicGroupAdminAction(BasicGroupAdminAction basicGroupAdminAction){

@@ -38,7 +38,7 @@ public class Server extends AbstractActor {
             .match(GroupMessage.class, this::groupMessage)
             .match(GroupLeave.class, (GroupLeave groupLeave) -> groupLeave(groupLeave, false))
             .match(GroupInviteUser.class, this::groupInviteUser)
-            .match(ResponseToGroupInviteUser.class, this::ResponseToGroupInviteUser)
+            .match(ResponseToGroupInviteUser.class, this::responseToGroupInviteUser)
             .match(BasicGroupAdminAction.class, this::basicGroupAdminAction)
             .build();
   }
@@ -154,67 +154,43 @@ public class Server extends AbstractActor {
   }
 
   private void groupInviteUser(GroupInviteUser groupInviteUser) {
-//    String response = "";
-//    boolean defaultFLAG = true;
-//    //check that <groupname> exist
-//    if (!groups.containsKey(groupInviteUser.groupName))
-//      response = "group does not exist!";
-//    //heck that <targetUserName> exist
-//    if (!users.containsKey(groupInviteUser.targetUserName))
-//      response = "target does not exist!";
-//
-//    //check <sourceusername> not admin or co-admin ->send to Group!!
-//    Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
-//    Future<Object> groupResp = Patterns.ask(groups.get(groupInviteUser.groupName), groupInviteUser, timeout);
-//    try {
-//      String result = (String) Await.result(groupResp, timeout.duration());
-//      switch (result){
-//        case "not admin or co-admin!":
-//          response = "not admin or co-admin!";
-//          break;
-//        case "not in group!":
-//          response = "not in group!";
-//          break;
-//        case "target already in group!":
-//          response="target already in group!";
-//          break;
-//        default: //this case is that all check in group were ok->send the request to the targetUser
-//          users.get(groupInviteUser.targetUserName).tell(new ResponseToGroupInviteUser(
-//                  groupInviteUser.groupName, groupInviteUser.sourceUserName,
-//                  groupInviteUser.targetUserName, response,users.get(groupInviteUser.targetUserName)), getSelf());
-//          defaultFLAG=false; //flag off for the .tell() outside the switch
-//          break;
-//      }
-//
-//    } catch (Exception e) {
-//      System.out.println("Error in GroupLeave!");
-//    }
-//    // TODO -makesure that getSender() is the return-call user and not the group!
-//    if(defaultFLAG) //if true- there was an error - sent it to the requested user
-//      getSender().tell(response, getSelf());
+    String response;
+    Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
+    Future<Object> answer;
+    String userAddress = users.get(groupInviteUser.targetUserName);
+    if(userAddress == null) {
+      getSender().tell(groupInviteUser.targetUserName + " does not exist!", getSelf());
+      return;
+    }
+    ActorRef group = groups.get(groupInviteUser.groupName);
+    if (group == null) {
+      getSender().tell(groupInviteUser.groupName + " does not exist!", getSelf());
+      return;
+    }
+    answer = Patterns.ask(group, groupInviteUser, timeout);
+    try {
+      response = (String) Await.result(answer, timeout.duration());
+      if(response.length() == 0){
+        ActorSelection actorRef = getContext().
+                actorSelection("akka://System@"+userAddress+"/user/"+groupInviteUser.targetUserName);
+        actorRef.tell(new ReceiveGroupInviteUser(groupInviteUser), getSelf());
+      }
+      getSender().tell(response, getSelf());
+    }
+    catch (Exception e) {
+      System.out.println("groupInviteUser ERROR: " + e);
+    }
   }
 
-  private void ResponseToGroupInviteUser(ResponseToGroupInviteUser backFromUser) {
-//    String response;
-//    if (backFromUser.answer.equals("yes")) {
-//      //if true-> notify group to add target, send confirmation to source and target
-//      groups.get(backFromUser.groupName).tell(backFromUser, getSelf()); //backFromUser hold the target ActorRef
-//      response = "welcome!";
-//      users.get(backFromUser.targetUserName).tell(response, getSelf());
-//      response = "done!";
-//      users.get(backFromUser.sourceUserName).tell(response, getSelf());
-//    }
-//    else{
-//      if (backFromUser.answer.equals("no")) {
-//        response="declined invitation!";
-//        users.get(backFromUser.sourceUserName).tell(response, getSelf());
-//      }else {
-//        //otherwise - send error to sourceUserName
-//        response = "invite error!";
-//        users.get(backFromUser.sourceUserName).tell(response, getSelf());
-//      }
-//    }
-//  }
-//}
+  private void responseToGroupInviteUser(ResponseToGroupInviteUser responseToGroupInviteUser) {
+    Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
+    Future<Object> answer;
+
+    ActorRef group = groups.get(responseToGroupInviteUser.groupName);
+    if (group == null) {
+      getSender().tell(responseToGroupInviteUser.groupName + " does not exist!", getSelf());
+      return;
+    }
+    group.tell(responseToGroupInviteUser, getSelf());
   }
 }
