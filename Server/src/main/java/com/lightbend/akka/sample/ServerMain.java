@@ -36,6 +36,7 @@ public class ServerMain {
         }
     }
 
+    //configure the akka system with args sent via user
     private static Config handleConfig() {
         try {
             String configPath = "src/main/resources/application.conf";

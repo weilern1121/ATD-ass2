@@ -49,7 +49,7 @@ public class User extends AbstractActor {
 
   private void receiveGroupInviteUser(ReceiveGroupInviteUser receiveGroupInviteUser){
     System.out.println("You have been invited to "+ receiveGroupInviteUser.invite.groupName+", Accept? [Yes]/[No]");
-    while(UserMain.groupInviteFlag ){} // todo: CHANGE MUTEX
+    while(UserMain.groupInviteFlag ){} // bussyWait - can't solve multi-request
     UserMain.groupInviteFlag = true;
     UserMain.groupInviteName = receiveGroupInviteUser.invite.groupName;
 
@@ -115,7 +115,7 @@ public class User extends AbstractActor {
           String result = (String) Await.result(answer, timeout.duration());
           if((disConnect.userName.equals(this.userName)) && result.equals(disConnect.userName + " has been disconnected successfully!")){
             System.out.println(result);
-            getContext().stop(getSelf());
+            getContext().stop(getSelf()); //shut down this actorRef
           }
           else{
             System.out.println(disConnect.userName + " failed to disconnect");

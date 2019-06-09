@@ -4,8 +4,6 @@ import akka.actor.ActorRef;
 import akka.actor.ActorSelection;
 import akka.actor.Props;
 import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import akka.pattern.Patterns;
 import akka.util.Timeout;
@@ -43,6 +41,7 @@ public class Server extends AbstractActor {
             .build();
   }
 
+  //used via group/user to get the actorSelect
   private void getAddress(GetAddress getAddress) {
     String userAdress = users.get(getAddress.userName);
     if(userAdress == null)
@@ -56,7 +55,7 @@ public class Server extends AbstractActor {
     Future<Object> answer;
 
     ActorRef group = groups.get(basicGroupAdminAction.groupName);
-    if (group == null) {
+    if (group == null) {//validation check
       getSender().tell(basicGroupAdminAction.groupName + " does not exist!", getSelf());
       return;
     }
@@ -72,7 +71,7 @@ public class Server extends AbstractActor {
   private void groupMessage(GroupMessage groupMessage) {
     String response = "";
     ActorRef group = groups.get(groupMessage.message.userOrGroup);
-    if (group == null) {
+    if (group == null) {//validation check
       response = groupMessage.message.userOrGroup + " does not exist!";
     }
     else {
@@ -100,11 +99,10 @@ public class Server extends AbstractActor {
 
   private void disConnect(DisConnect disConnect) {
     String response;
-    if (users.containsKey(disConnect.userName)) {
-
-      for (Map.Entry<String, ActorRef> entry : groups.entrySet()) {
-        groupLeave(new GroupLeave(entry.getKey(), disConnect.userName), true);
-      }
+    if (users.containsKey(disConnect.userName)) {//validation check
+      //itarate over the groups list and remove groups that disConnect.userName==group.ADMIN
+      groups.entrySet().removeIf(e -> groupLeave(new GroupLeave(e.getKey(), disConnect.userName), true));
+      //finally - remove user from user list
       users.remove(disConnect.userName);
       response = disConnect.userName + " has been disconnected successfully!";
     }
@@ -120,6 +118,7 @@ public class Server extends AbstractActor {
       response = groupCreate.groupName + " already exists!";
     } else {
       response = groupCreate.groupName + " created successfully!";
+      //create the actorRef for this new group
       ActorRef group =
               getContext().actorOf(Group.props(groupCreate.groupName, groupCreate.adminName), groupCreate.groupName);
       groups.put(groupCreate.groupName, group);
@@ -128,28 +127,32 @@ public class Server extends AbstractActor {
   }
 
 
-  private void groupLeave(GroupLeave groupLeave, boolean disconnect) {
+  private boolean groupLeave(GroupLeave groupLeave, boolean disconnect) {
     Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
     Future<Object> answer;
-
+    boolean adminExit=false;
     ActorRef group = groups.get(groupLeave.groupName);
     if (group == null) {
       if(!disconnect)
         getSender().tell(groupLeave.groupName + " does not exist!", getSelf());
-      return;
+      return false;
     }
     answer = Patterns.ask(group, groupLeave, timeout);
     try {
       String response = (String) Await.result(answer, timeout.duration());
       if(response.equals("admin exit!")){
-        groups.remove(groupLeave.groupName);
-        getContext().stop(group);
+        if(!disconnect) //if true - should remove group from this func. else -remove via iteration in disconnect
+          groups.remove(groupLeave.groupName);
+        getContext().stop(group);//close actor
+        adminExit = true;
       }
-      if(!disconnect)
-        getSender().tell("", getSelf());
+      if(!disconnect) //if from disconnect - should not send message to target
+        getSender().tell(response, getSelf());
+      return adminExit;
     }
     catch (Exception e) {
       System.out.println("groupLeave ERROR: " + e);
+      return false;
     }
   }
 
@@ -158,19 +161,19 @@ public class Server extends AbstractActor {
     Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
     Future<Object> answer;
     String userAddress = users.get(groupInviteUser.targetUserName);
-    if(userAddress == null) {
+    if(userAddress == null) {//validation check
       getSender().tell(groupInviteUser.targetUserName + " does not exist!", getSelf());
       return;
     }
     ActorRef group = groups.get(groupInviteUser.groupName);
-    if (group == null) {
+    if (group == null) {//validation check
       getSender().tell(groupInviteUser.groupName + " does not exist!", getSelf());
       return;
     }
     answer = Patterns.ask(group, groupInviteUser, timeout);
     try {
       response = (String) Await.result(answer, timeout.duration());
-      if(response.length() == 0){
+      if(response.length() == 0){ //if true - all check were passed ->send message to targetUser
         ActorSelection actorRef = getContext().
                 actorSelection("akka://System@"+userAddress+"/user/"+groupInviteUser.targetUserName);
         actorRef.tell(new ReceiveGroupInviteUser(groupInviteUser), getSelf());
@@ -187,7 +190,7 @@ public class Server extends AbstractActor {
     Future<Object> answer;
 
     ActorRef group = groups.get(responseToGroupInviteUser.groupName);
-    if (group == null) {
+    if (group == null) {//validation check
       getSender().tell(responseToGroupInviteUser.groupName + " does not exist!", getSelf());
       return;
     }

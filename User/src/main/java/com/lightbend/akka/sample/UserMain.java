@@ -28,7 +28,7 @@ public class UserMain {
   public static boolean groupInviteFlag = false;
   public static String groupInviteName;
 
-
+  //connect and set akka system
   private static void systemConnect(){
     int count = 0;
     handleConfig();
@@ -48,6 +48,8 @@ public class UserMain {
       }
     }
   }
+
+  //main func. connect to akka system, then parse user imput commnads
   public static void main(String[] args) {
     if(args.length < 2){
       System.out.println("MISSING ARGS!");
@@ -78,17 +80,21 @@ public class UserMain {
           groupInviteFlag = false;
           groupInviteName = null;
       }
-
-        switch (command[0]){
-          case "/user":
-            userCommand(command);
-            break;
-          case "/group":
-            groupCommand(command);
-            break;
-          case "exit":
-            exit=true;
-            break;
+        try {
+          switch (command[0]) {
+            case "/user":
+              userCommand(command);
+              break;
+            case "/group":
+              groupCommand(command);
+              break;
+            case "exit":
+              exit = true;
+              break;
+          }
+        }
+        catch(ArrayIndexOutOfBoundsException e){
+          System.out.println("ERROR: ILLEGAL COMMAND!");
         }
       }
     }
@@ -100,7 +106,9 @@ public class UserMain {
     }
 
 
-    }
+  }
+
+  //parse user commands
   private static void userCommand(String[] command){
     switch (command[1]){
       case "connect":
@@ -119,6 +127,7 @@ public class UserMain {
         break;
     }
   }
+  //parse group commands
   private static void groupCommand(String[] command){
     switch (command[1]){
       case "create":
@@ -177,6 +186,7 @@ public class UserMain {
     }
   }
 
+  //connect to server and get the user actor ref
   private static void connectToServer(Connect connect){
     Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
     try{
@@ -195,6 +205,7 @@ public class UserMain {
       System.out.println("server is offline!");
     }
   }
+  //configure the akka system with args sent via user
   private static void handleConfig(){
     try {
       String configPath = "src/main/resources/application.conf";

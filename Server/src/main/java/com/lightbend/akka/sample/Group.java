@@ -5,12 +5,9 @@ import akka.util.Timeout;
 import com.lightbend.akka.sample.Messages.*;
 import scala.concurrent.Await;
 import scala.concurrent.Future;
-
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.Map;
 import java.util.concurrent.*;
-
 import static com.lightbend.akka.sample.Group.State.ADMIN;
 
 
@@ -26,11 +23,7 @@ public class Group extends AbstractActor {
         this.groupUsers = new HashMap<>();
         this.server = getContext().actorSelection("akka://System@"+ServerMain.host+":"+ServerMain.port+"/user/Server");
         ActorSelection adminRef = getActorByName(adminName);
-        this.groupUsers.put(adminName, new GroupUser(ADMIN, adminRef));
-
-        //-------------for tests
-//        ActorSelection userRef = getActorByName("t");
-//        this.groupUsers.put("t", new GroupUser(State.USER, userRef));
+        this.groupUsers.put(adminName, new GroupUser(ADMIN, adminRef));//insert group admin during the group creation
     }
 
     static public Props props(String groupName, String admin) {
@@ -68,6 +61,7 @@ public class Group extends AbstractActor {
                 .match(ResponseToGroupInviteUser.class, this::responseToGroupInviteUser)
                 .build();
     }
+
     //got to this func from server when checking validation of the groupInvite
     private void handleGroupInviteUser(GroupInviteUser invitation) {
         GroupUser targetUser = groupUsers.get(invitation.targetUserName);
@@ -81,6 +75,7 @@ public class Group extends AbstractActor {
             message = "";
         getSender().tell(message, getSelf());
     }
+    //handles both add&remove Coad , functionality options are in the field requestType
     private String handleGroupCoAdmin(GroupCoAdmin CoadRequest, GroupUser targetUser) {
         String response = "";
         boolean alreadyFLAG=true;
@@ -117,6 +112,7 @@ public class Group extends AbstractActor {
         return response;
     }
 
+    //got here after user accept groupInvite
     private void responseToGroupInviteUser (ResponseToGroupInviteUser responseToGroupInviteUser){
         String userName = responseToGroupInviteUser.userName;
         ActorSelection userRef = getActorByName(userName);
@@ -125,6 +121,7 @@ public class Group extends AbstractActor {
     }
 
 
+    //general checks for several extending funcs, after checks call the specific handler
     private void basicGroupAdminAction(BasicGroupAdminAction basicGroupAdminAction){
         GroupUser targetUser = groupUsers.get(basicGroupAdminAction.targetUserName);
         GroupUser sourceUser = groupUsers.get(basicGroupAdminAction.sourceUserName);
@@ -133,7 +130,7 @@ public class Group extends AbstractActor {
             message = basicGroupAdminAction.targetUserName + " does not exist!";
         else if ((sourceUser==null) || ((sourceUser.state != State.COADMIN) && (sourceUser.state != ADMIN)))
             message = "You are neither an admin nor a co-admin of " + groupName + "!";
-        else {
+        else {//got here- check ok -> send to specific handler
             if (basicGroupAdminAction instanceof GroupUserRemove)
                 message = groupUserRemove((GroupUserRemove) basicGroupAdminAction, targetUser);
             if (basicGroupAdminAction instanceof GroupUserMute)
@@ -170,11 +167,11 @@ public class Group extends AbstractActor {
         ReceiveMessage message = groupMessage.message;
         String sender = message.sendFrom;
         GroupUser user = groupUsers.get(sender);
-        if (user == null) {
+        if (user == null) {//validation check
             getSender().tell(String.format("You are not part of %s!", groupName), getSelf());
             return;
         }
-        else if (muteService.isMute(sender)){
+        else if (muteService.isMute(sender)){//mute validation check
             getSender().tell(String.format("You are Muted in %s!", groupName), getSelf());
             return;
         }
@@ -182,6 +179,7 @@ public class Group extends AbstractActor {
         sendToAll(message);
     }
 
+    //broadcast func in group
     private void sendToAll(ReceiveMessage message) {
         GroupUser user;
         for (Map.Entry<String, GroupUser> entry : groupUsers.entrySet()) {
@@ -194,7 +192,7 @@ public class Group extends AbstractActor {
         String response = "";
         //check that user is in group
         GroupUser user = groupUsers.get(groupLeaveReaquest.sourceUserName);
-        if(user == null) {
+        if(user == null) {//validation check
             getSender().tell(String.format("You are not part of %s!", groupName), getSelf());
             return;
         }
@@ -208,6 +206,7 @@ public class Group extends AbstractActor {
         groupUsers.remove(groupLeaveReaquest.sourceUserName);//remove from user list
         getSender().tell(response, getSelf());
     }
+
 
     private ActorSelection getActorByName(String userName){
         Timeout timeout = new Timeout(5000, TimeUnit.MILLISECONDS);
