@@ -2,9 +2,9 @@
 ## ATD-ass2- Actor model- akka
 
 Name: Tomer Kulla
-ID: 308235944
+ID: 308235944 </br>
 Name: Noam Weiler
-ID: 203570619 </br>
+ID: 203570619 </br></br>
 
 ## ABOUT: <br />
 
@@ -63,17 +63,17 @@ ID: 203570619 </br>
 * To Start Server:<br />
 	inside Server folder-
 	run:
- 1. mvn compile
- 2. mvn clean install
- 3. mvn exec:exec -Dhost=<server_host> -Dport=<server_port>
+ 	1. mvn compile
+ 	2. mvn clean install
+ 	3. mvn exec:exec -Dhost=<server_host> -Dport=<server_port>
  EXAMPLE: mvn exec:exec -Dhost=127.0.0.1 -Dport=8080.
 
 * To Start User:<br />
 	inside User folder-
 	run:
-1. mvn compile
-2. mvn clean install
-3. mvn exec:exec mvn exec:exec -Duser_host=<user_host> -Dserver_address=<server_full_adress> 
+	1. mvn compile
+	2. mvn clean install
+	3. mvn exec:exec mvn exec:exec -Duser_host=<user_host> -Dserver_address=<server_full_adress> 
 EXAMPLE: mvn exec:exec -Duser_host=127.0.0.1 -Dserver_address=127.0.0.1:8080
 
 
